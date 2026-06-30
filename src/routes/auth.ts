@@ -9,6 +9,7 @@ import { hashPassword, verifyPassword } from "../lib/crypto.js";
 import { sign } from "hono/jwt";
 import { env } from "../data/env.js";
 import { auth } from "../auth.js";
+import { downloadAndSaveAvatar } from "../lib/avatar.js";
 
 const app = new Hono();
 
@@ -46,7 +47,13 @@ app.post(
             schema: resolver(
               z.object({
                 id: z.string(),
+                name: z.string(),
                 email: z.string(),
+                role: z.string(),
+                image: z.string().nullable(),
+                createdFrom: z.string().nullable(),
+                createdAt: z.date(),
+                updatedAt: z.date(),
               })
             ),
           },
@@ -73,20 +80,42 @@ app.post(
     const passwordHash = await hashPassword(password);
     const userId = randomUUID();
     
+    let localImagePath: string | null = null;
+    if (image && image.startsWith("http")) {
+      const downloaded = await downloadAndSaveAvatar(userId, image);
+      if (downloaded) {
+        localImagePath = downloaded;
+      }
+    } else if (image) {
+      localImagePath = image;
+    }
+
+    const userName = name || email.split("@")[0];
+    const now = new Date();
+
     await db
       .insert(UserTable)
       .values({
         id: userId,
         email,
-        name: name || email.split("@")[0],
+        name: userName,
         passwordHash,
         createdFrom: "system",
-        image: image || null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        image: localImagePath,
+        createdAt: now,
+        updatedAt: now,
       });
 
-    return c.json({ id: userId, email }, 201);
+    return c.json({
+      id: userId,
+      name: userName,
+      email,
+      role: "USER",
+      image: localImagePath,
+      createdFrom: "system",
+      createdAt: now,
+      updatedAt: now,
+    }, 201);
   }
 );
 
@@ -104,6 +133,16 @@ app.post(
             schema: resolver(
               z.object({
                 token: z.string(),
+                user: z.object({
+                  id: z.string(),
+                  name: z.string(),
+                  email: z.string(),
+                  role: z.string(),
+                  image: z.string().nullable(),
+                  createdFrom: z.string().nullable(),
+                  createdAt: z.date(),
+                  updatedAt: z.date(),
+                }),
               })
             ),
           },
@@ -140,7 +179,19 @@ app.post(
       "HS256",
     );
 
-    return c.json({ token });
+    return c.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        image: user.image,
+        createdFrom: user.createdFrom,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+    });
   }
 );
 

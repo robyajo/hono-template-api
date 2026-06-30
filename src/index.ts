@@ -3,15 +3,33 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { secureHeaders } from 'hono/secure-headers';
 import apiRouter from './routes/index.js';
 import type { AuthVariables } from './middleware/auth.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import { writeLog } from './lib/logger.js';
+import { serveStatic } from '@hono/node-server/serve-static';
 
 const app = new Hono<{
   Variables: AuthVariables;
 }>();
 
-// Mount logger middleware for console tracing
-app.use(logger());
+// Mount secure headers middleware globally
+app.use(secureHeaders());
+
+// Serve public storage assets statically under /storage/*
+app.use(
+  '/storage/*',
+  serveStatic({
+    root: './storage/app/public',
+    rewriteRequestPath: (path) => path.replace(/^\/storage/, ''),
+  })
+);
+
+// Mount logger middleware for console tracing and file writing
+app.use(logger((message) => {
+  writeLog("INFO", message);
+}));
 
 // Mount CORS middleware for all api routes
 app.use(
@@ -33,16 +51,7 @@ app.get('/', (c) => {
 });
 
 // Global Error Handler
-app.onError((err, c) => {
-  console.error(`[Error] ${err.name}: ${err.message}`, err.stack);
-  
-  const status = c.res.status === 200 || !c.res.status ? 500 : c.res.status;
-  return c.json({
-    error: err.name || "InternalServerError",
-    message: err.message || "An unexpected error occurred",
-    status,
-  }, status as any);
-});
+app.onError(errorHandler);
 
 // 404 Not Found Handler
 app.notFound((c) => {

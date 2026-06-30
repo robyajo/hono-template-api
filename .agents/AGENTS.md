@@ -45,6 +45,13 @@ Reset with seed: `npm run db:reset -- --seed` (extra `--` required by npm).
 - `.env` and `.env.production` are gitignored
 - No CI/CD, no linter, no tests, no pre-commit hooks configured
 
+## Storage
+
+- Root: `storage/` (Laravel-style layout)
+  - `storage/log/log.log` — main application log file
+  - `storage/app/public/` — public files/assets (e.g. user avatars)
+  - `storage/app/private/` — private files/documents requiring authorization checks
+
 ## Style
 
 - Use `src/index.ts` import pattern for env: `import "dotenv/config"` at top

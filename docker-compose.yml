@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: hono_api_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: '123'
+      MYSQL_DATABASE: 'db_hono_api'
+    ports:
+      - '3306:3306'
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - db_data:/var/lib/mysql
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hono_api_app
+    restart: always
+    ports:
+      - '8000:8000'
+    environment:
+      PORT: 8000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: '123'
+      DB_NAME: db_hono_api
+      JWT_SECRET: 'randomlyGeneratedSecretKey1234567890'
+      BETTER_AUTH_SECRET: 'your_better_auth_secret_minimum_32_characters_long'
+      BETTER_AUTH_URL: 'http://localhost:8000'
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:

@@ -4,6 +4,7 @@ import { openAPI } from "better-auth/plugins";
 import { createAuthEndpoint } from "better-auth/api";
 import { db } from "./db/index.js";
 import * as authSchema from "./db/schema/auth.js";
+import { downloadAndSaveAvatar } from "./lib/avatar.js";
 
 const providers = [
     "apple",
@@ -228,12 +229,48 @@ export const auth = betterAuth({
         autoSignIn: true,
         minPasswordLength: 8,
     },
+    databaseHooks: {
+        user: {
+            create: {
+                before: async (user) => {
+                    if (user.image && user.image.startsWith("http")) {
+                        const localImage = await downloadAndSaveAvatar(user.id, user.image!);
+                        if (localImage) {
+                            user.image = localImage;
+                        }
+                    }
+                    // For social OAuth registers (like Google), set createdFrom as "google"
+                    if (!user.createdFrom || user.createdFrom === "system") {
+                        user.createdFrom = "google";
+                    }
+                    return { data: user };
+                },
+            },
+            update: {
+                before: async (user) => {
+                    if (user.image && user.image.startsWith("http")) {
+                        const localImage = await downloadAndSaveAvatar(user.id!, user.image!);
+                        if (localImage) {
+                            user.image = localImage;
+                        }
+                    }
+                    return { data: user };
+                },
+            },
+        },
+    },
     user: {
         additionalFields: {
             role: {
                 type: "string",
                 required: false,
                 defaultValue: "USER",
+                input: false,
+            },
+            createdFrom: {
+                type: "string",
+                required: false,
+                defaultValue: "system",
                 input: false,
             },
         },

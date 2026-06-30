@@ -5,9 +5,11 @@ import { randomUUID } from "node:crypto";
 import { db } from "../db/index.js";
 import { user as UserTable } from "../db/schema/auth.js";
 import { eq } from "drizzle-orm";
-import { sessionMiddleware, adminMiddleware } from "../middleware/auth.js";
+import { sessionMiddleware } from "../middleware/auth.js";
+import { ensureAdmin } from "../middleware/ensureAdmin.js";
 import type { AuthVariables } from "../middleware/auth.js";
 import { hashPassword } from "../lib/crypto.js";
+import { downloadAndSaveAvatar } from "../lib/avatar.js";
 
 const app = new Hono<{
     Variables: AuthVariables;
@@ -18,6 +20,7 @@ const createUserSchema = z.object({
     email: z.string().email(),
     password: z.string().min(8),
     role: z.enum(["ADMIN", "USER"]).default("USER"),
+    image: z.string().url().optional(),
 });
 
 const updateUserSchema = z.object({
@@ -61,7 +64,7 @@ app.get(
             },
         },
     }),
-    adminMiddleware,
+    ensureAdmin,
     async (c) => {
         const users = await db
             .select({
@@ -98,12 +101,12 @@ app.get(
     }
 );
 
-// 3. Get user by ID (Admin or owner)
+// 3. Get user by ID (Admin only)
 app.get(
     "/:id",
     describeRoute({
         summary: "Get user by ID",
-        description: "Retrieve user details by ID (Admin or profile owner only)",
+        description: "Retrieve user details by ID (Admin only)",
         responses: {
             200: {
                 description: "Success",
@@ -116,13 +119,9 @@ app.get(
             },
         },
     }),
+    ensureAdmin,
     async (c) => {
         const id = c.req.param("id");
-        const currentUser = c.get("user");
-
-        if (currentUser.role !== "ADMIN" && currentUser.id !== id) {
-            return c.json({ error: "Forbidden: Access denied" }, 403);
-        }
 
         const [targetUser] = await db
             .select({
@@ -161,10 +160,10 @@ app.post(
             },
         },
     }),
-    adminMiddleware,
+    ensureAdmin,
     validator("json", createUserSchema),
     async (c) => {
-        const { name, email, password, role } = c.req.valid("json");
+        const { name, email, password, role, image } = c.req.valid("json");
 
         const [existing] = await db
             .select()
@@ -178,26 +177,36 @@ app.post(
         const passwordHash = await hashPassword(password);
         const newId = randomUUID();
 
+        let localImagePath: string | null = null;
+        if (image && image.startsWith("http")) {
+            const downloaded = await downloadAndSaveAvatar(newId, image);
+            if (downloaded) {
+                localImagePath = downloaded;
+            }
+        }
+
         await db.insert(UserTable).values({
             id: newId,
             name,
             email,
             passwordHash,
             role,
+            image: localImagePath,
+            createdFrom: "system",
             createdAt: new Date(),
             updatedAt: new Date(),
         });
 
-        return c.json({ id: newId, name, email, role }, 201);
+        return c.json({ id: newId, name, email, role, image: localImagePath }, 201);
     }
 );
 
-// 5. Update user (Admin or owner)
+// 5. Update user (Admin only)
 app.put(
     "/:id",
     describeRoute({
         summary: "Update user details",
-        description: "Update user profile fields (Admin or profile owner only)",
+        description: "Update user profile fields (Admin only)",
         responses: {
             200: {
                 description: "User updated successfully",
@@ -213,15 +222,11 @@ app.put(
             },
         },
     }),
+    ensureAdmin,
     validator("json", updateUserSchema),
     async (c) => {
         const id = c.req.param("id");
-        const currentUser = c.get("user");
         const body = c.req.valid("json");
-
-        if (currentUser.role !== "ADMIN" && currentUser.id !== id) {
-            return c.json({ error: "Forbidden: Access denied" }, 403);
-        }
 
         const [targetUser] = await db
             .select()
@@ -251,12 +256,16 @@ app.put(
         if (body.password !== undefined) {
             updateData.passwordHash = await hashPassword(body.password);
         }
-        if (body.image !== undefined) updateData.image = body.image;
+        if (body.image !== undefined) {
+            if (body.image && body.image.startsWith("http")) {
+                const downloaded = await downloadAndSaveAvatar(id, body.image);
+                updateData.image = downloaded || body.image;
+            } else {
+                updateData.image = body.image;
+            }
+        }
 
         if (body.role !== undefined) {
-            if (currentUser.role !== "ADMIN") {
-                return c.json({ error: "Forbidden: Only admins can change user roles" }, 403);
-            }
             updateData.role = body.role;
         }
 
@@ -287,7 +296,7 @@ app.delete(
             },
         },
     }),
-    adminMiddleware,
+    ensureAdmin,
     async (c) => {
         const id = c.req.param("id");
         const currentUser = c.get("user");
