@@ -142,3 +142,23 @@ await db.transaction(async (tx) => {
   // Perform other related operations using `tx`
 });
 ```
+
+---
+
+## 🧹 Database Reset
+
+If you need to completely empty your database tables and start fresh, you can use the reset scripts.
+
+### 1. Reset Database (Empty Tables)
+This command disables foreign key checks, drops all tables in the database, re-enables checks, and runs all migrations from scratch.
+```bash
+npm run db:reset
+```
+
+### 2. Reset and Reseed Database
+To reset the database and immediately run the seeder script (to recreate the default admin user and other initial data), use the `--seed` flag:
+```bash
+npm run db:reset -- --seed
+```
+> [!NOTE]
+> The extra `--` is needed to forward the `--seed` argument to the underlying script via npm.

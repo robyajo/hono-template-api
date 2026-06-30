@@ -1,0 +1,1 @@
+ALTER TABLE `user` ADD `created_from` varchar(50) DEFAULT 'system' NOT NULL;

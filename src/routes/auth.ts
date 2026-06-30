@@ -19,6 +19,8 @@ const registerSchema = z
     email: z.string().email().min(1),
     password: z.string().min(8),
     confirmPassword: z.string().min(8),
+    name: z.string().optional(),
+    image: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
@@ -57,7 +59,7 @@ app.post(
   }),
   validator("json", registerSchema),
   async (c) => {
-    const { email, password } = c.req.valid("json");
+    const { email, password, name, image } = c.req.valid("json");
     
     const [existing] = await db
       .select()
@@ -76,8 +78,10 @@ app.post(
       .values({
         id: userId,
         email,
-        name: email.split("@")[0],
+        name: name || email.split("@")[0],
         passwordHash,
+        createdFrom: "system",
+        image: image || null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });

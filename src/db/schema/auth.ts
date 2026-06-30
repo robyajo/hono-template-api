@@ -9,6 +9,7 @@ export const user = mysqlTable("user", {
     image: text("image"),
     role: varchar("role", { length: 50 }).default("USER").notNull(),
     passwordHash: text("password_hash"),
+    createdFrom: varchar("created_from", { length: 50 }).default("system").notNull(),
     createdAt: datetime("created_at", { mode: "date" }).notNull(),
     updatedAt: datetime("updated_at", { mode: "date" })
         .$onUpdate(() => new Date())

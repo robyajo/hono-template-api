@@ -8,6 +8,13 @@
       "when": 1782806914291,
       "tag": "0000_lonely_expediter",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1782809025063,
+      "tag": "0001_previous_gauntlet",
+      "breakpoints": true
     }
   ]
 }
